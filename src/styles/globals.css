@@ -35,3 +35,7 @@ a {
 .first-appear {
   opacity: 0;
 }
+
+.main-container {
+  position: relative;
+}

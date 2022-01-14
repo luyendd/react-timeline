@@ -1,7 +1,5 @@
 .container {
   padding: 0 2rem;
-  position: relative;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  /* margin-top: 500px; */
 }

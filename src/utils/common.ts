@@ -1,5 +1,5 @@
+import { PointPostion, IPathOption } from 'components/BezierRoadLine';
 import React, { useCallback, useEffect, useState } from 'react';
-import { IPathOption, PointPostion } from '../pages/components/BezierRoadLine';
 
 // Hook customizations
 // `useContainerDimensions` provides width and height for Ref Element.
@@ -166,6 +166,8 @@ const controlPoints = (p: Array<number[]>, t: number) => {
 export const generateBezierLine = ({
   e1,
   e2,
+  xBezier = 0,
+  yBezier = 0,
   topGap,
   leftGap,
   strokeWidth,
@@ -181,6 +183,8 @@ export const generateBezierLine = ({
 }: {
   e1: IElementRect;
   e2: IElementRect;
+  xBezier?: number; // left bezier container
+  yBezier?: number; // top bezier container
   topGap: number;
   leftGap: number;
   strokeWidth: number;
@@ -196,16 +200,16 @@ export const generateBezierLine = ({
   const baseLeftStartX = start.leftGap != null ? start.leftGap : leftGap;
   const baseTopStartY = start.topGap != null ? start.topGap : topGap;
   const startPoint = {
-    x: getElementXCordinate(e1, start.position, strokeWidth) + baseLeftStartX,
-    y: getElementYCordinate(e1, start.position, strokeWidth) + baseTopStartY,
+    x: getElementXCordinate(e1, start.position, strokeWidth) + baseLeftStartX - xBezier,
+    y: getElementYCordinate(e1, start.position, strokeWidth) + baseTopStartY - yBezier,
   };
 
   // Get X and Y cordinates of end point
   const baseLeftEndX = end.leftGap != null ? end.leftGap : leftGap;
   const baseTopEndY = end.topGap != null ? end.topGap : topGap;
   const endPoint = {
-    x: getElementXCordinate(e2, end.position, strokeWidth) + baseLeftEndX,
-    y: getElementYCordinate(e2, end.position, strokeWidth) + baseTopEndY,
+    x: getElementXCordinate(e2, end.position, strokeWidth) + baseLeftEndX - xBezier,
+    y: getElementYCordinate(e2, end.position, strokeWidth) + baseTopEndY - yBezier,
   };
 
   // Get total curve point

@@ -59,7 +59,7 @@ const pathOptions: Array<IPathOption> = [
       position: 'bottomLeft',
     },
     end: {
-      position: 'topRight',
+      position: 'rightCenter',
     },
   },
   {
@@ -107,17 +107,26 @@ const BezierRoadLine: FunctionComponent<Props> = ({
       const tempRef = ref.current;
       ref.current = [];
       //Generate all paths for above elements.
+
+      //Get width and height bezier container
+      const bezierBLR = document
+        .querySelector('#bezierRoadLine')
+        ?.getBoundingClientRect();
+
       for (let index = 0; index < totalElement.length - 1; index++) {
         //Generate all positions by passing two elements.
         const generatePoints = generateBezierLine({
           e1: getOffset(totalElement[index]),
           e2: getOffset(totalElement[index + 1]),
+          xBezier: bezierBLR?.left,
+          yBezier: bezierBLR?.height
+            ? document.body.offsetHeight - bezierBLR?.height
+            : 0,
           topGap,
           leftGap,
           strokeWidth,
           option: pathOptions[index],
           defaultDistance,
-          // enalbleOpposite: false,
         });
         //Save that target and position to ref so that we can improve performance when users are scrolling.
         ref.current.push({
@@ -168,6 +177,7 @@ const BezierRoadLine: FunctionComponent<Props> = ({
           endRoadCircle.style.display = '';
         }
       }, animationTime);
+      // save animated road to ref
       ref.current[index].animated = true;
     }
     //Start first appear animation
@@ -222,11 +232,12 @@ const BezierRoadLine: FunctionComponent<Props> = ({
     const animationElements: NodeListOf<Element> =
       document.querySelectorAll(`.first-appear`);
     //Get container element
-    const containerElement: HTMLElement | null =
+    const bezierContainer: HTMLElement | null =
       document.querySelector('#bezierRoadLine');
+
     //Show all animation when prepations finish
-    if (containerElement) {
-      containerElement.style.opacity = '1';
+    if (bezierContainer) {
+      bezierContainer.style.opacity = '1';
     }
 
     //Add scroll event listener
@@ -263,15 +274,6 @@ const BezierRoadLine: FunctionComponent<Props> = ({
 
   return (
     <svg className='overflow-clip' width={width} height={height}>
-      <path
-        d={`M ${paths[0]?.startPoint} 
-            ${paths[0]?.endPoint}
-        `}
-        strokeWidth={strokeWidth}
-        strokeLinecap='round'
-        fill='none'
-        className='stroke-orange-500'
-      ></path>
       {paths &&
         paths.map((path: IGeneratePath, index: number) => (
           <React.Fragment key={`path + ${index}`}>
@@ -281,14 +283,14 @@ const BezierRoadLine: FunctionComponent<Props> = ({
               strokeWidth={strokeWidth}
               strokeLinecap='round'
               fill='none'
-              className='stroke-neutral-500'
+              className='stroke-neutral-500 dark:stroke-violet-500'
             ></path>
             <ellipse
               cx={path.startPoint[0]}
               cy={path.startPoint[1]}
               rx={strokeWidth * 1.25}
               ry={strokeWidth * 1.25}
-              className='fill-blue-400'
+              className='fill-blue-400 dark:fill-amber-300'
             ></ellipse>
             <ellipse
               cx={path.endPoint[0]}
@@ -297,7 +299,7 @@ const BezierRoadLine: FunctionComponent<Props> = ({
               ry={strokeWidth * 1.25}
               id={`${END_ROAD_CIRCLE}-${index}`}
               style={{ display: 'none' }}
-              className='fill-blue-600'
+              className='fill-blue-600 dark:fill-amber-600'
             ></ellipse>
           </React.Fragment>
         ))}

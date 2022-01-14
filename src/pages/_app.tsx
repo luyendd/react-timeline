@@ -4,6 +4,7 @@ import 'styles/globals.css';
 import type { AppProps } from 'next/app';
 import { ThemeProvider } from 'next-themes';
 import Loading from 'components/Loading';
+import Layout from 'components/Layout';
 
 function MyApp({ Component, pageProps }: AppProps) {
   const [loading, setLoading] = React.useState(false);
@@ -37,8 +38,10 @@ function MyApp({ Component, pageProps }: AppProps) {
   return (
     <>
       {!loading && (
-        <ThemeProvider attribute="class">
-          <Component {...pageProps} />
+        <ThemeProvider attribute='class'>
+          <Layout>
+            <Component {...pageProps} />
+          </Layout>
         </ThemeProvider>
       )}
       <Loading />
