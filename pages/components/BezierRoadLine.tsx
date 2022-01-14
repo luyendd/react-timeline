@@ -1,104 +1,306 @@
-import React, { FunctionComponent, useEffect, useMemo, useState } from 'react';
-
-/**
- * `getInterpolatedValue` provides a midpoint value
- * between y1 and y2, based on the ratio provided.
- *
- * @param {number} y1 - the value when our curve is
- *                      totally curvy
- * @param {number} y2 - the value when our curve is
- *                      totally flat
- * @param {number} x  - a value from 0 to 1 that
- *                      represents the ratio of curvy
- *                      to flat (0 = totally curvy,
- *                      1 = totally flat).
- */
-const getInterpolatedValue = (y1: number, y2: number, x: number) => {
-  // The slope of a line can be calculated as Δy / Δx.
-  //
-  // In this case, the domain of our function (AKA the
-  // possible X values) are from 0 (x1) to 1 (x2).
-  // Δx is therefore just equal to 1 (since 1 - 0 = 1).
-  //
-  // Because dividing by 1 has no effect, our slope in
-  // this case can just be Δy.
-  const a = y2 - y1;
-
-  // Next, we know that y = ax + b.
-  //
-  // `b` is the Y-axis intercept, which we know is `y1`,
-  // since `y1` is the `y` value when `x` is 0.
-  return a * x + y1;
-};
-
-const getOffset = (el: Element) => {
-  const rect = el.getBoundingClientRect();
-  return {
-    height: rect.height,
-    width: rect.width,
-    left: rect.left + window.scrollX,
-    top: rect.top + window.scrollY,
-  };
-};
+import React, { FunctionComponent, useEffect, useRef, useState } from 'react';
+import { countToZero, generateBezierLine, getOffset } from '../../utils/common';
 
 type Props = {
   strokeWidth: number;
   width: number;
   height: number;
+  animationGap?: number;
+  animationTime?: number;
+  defaultDistance?: number;
+  topGap?: number;
+  leftGap?: number;
 };
+
+interface IGeneratePath {
+  startPoint: Array<number>;
+  endPoint: Array<number>;
+  path: string;
+}
+
+export type PointPostion =
+  | 'topLeft'
+  | 'topCenter'
+  | 'topRight'
+  | 'bottomLeft'
+  | 'bottomCenter'
+  | 'bottomRight'
+  | 'leftCenter'
+  | 'rightCenter';
+
+export interface IOptionPoint {
+  topGap?: number; //pixel
+  leftGap?: number; //pixel
+}
+export interface IPointPath extends IOptionPoint {
+  position?: PointPostion;
+  perimeter?: number; //pixel
+}
+
+export interface IControlPoint extends IOptionPoint {
+  t?: number; // 0 <= t <= 1 for the beautiful path
+  length?: number;
+  distance?: number; // pixel
+  opposite?: boolean; // pixel
+}
+
+export interface IPathOption {
+  start?: IPointPath;
+  end?: IPointPath;
+  cPoints?: Array<IControlPoint>;
+  curvePointNumber?: number; // curve points number. Minimum is 2
+  animationDelay?: number; // milisecond
+  animationScrollGap?: number; // pixel
+}
+
+const pathOptions: Array<IPathOption> = [
+  {
+    start: {
+      position: 'bottomLeft',
+    },
+    end: {
+      position: 'topRight',
+    },
+  },
+  {
+    start: {
+      position: 'bottomCenter',
+    },
+    end: {
+      position: 'topCenter',
+    },
+  },
+  {
+    start: {
+      position: 'bottomCenter',
+    },
+    end: {
+      position: 'topCenter',
+    },
+  },
+];
+
+const END_ROAD_CIRCLE = `end-road`;
 
 const BezierRoadLine: FunctionComponent<Props> = ({
   strokeWidth,
   width,
   height,
+  animationGap = 150,
+  animationTime = 600,
+  defaultDistance = 100,
+  topGap = 0,
+  leftGap = 0,
 }) => {
-  const [startPoint, setStartPoint] = useState<Array<number>>([0, 0]);
-  const [middlePoints, setMiddlePoints] = useState<Array<number>>([0, 0]);
-  const [endPoint, setEndPoint] = useState<Array<number>>([1, 1]);
-  // const minValue = useMemo(() => strokeWidth / 2, [strokeWidth]);
+  const [paths, setPaths] = useState<Array<IGeneratePath> | null>(null);
+  const ref = useRef<
+    Array<{ position: number; target: Element; animated?: boolean }>
+  >([]);
 
   useEffect(() => {
-    const topGap = 10;
     function init() {
+      //Get all elements which are need to use road lines.
       const totalElement = document.querySelectorAll(`[use-road-line="true"]`);
-      const firstElementRect = getOffset(totalElement[0]);
-      setStartPoint([
-        firstElementRect.left - strokeWidth + firstElementRect.width / 2,
-        firstElementRect.top + firstElementRect.height + topGap,
-      ]);
-      const secondElementRect = getOffset(totalElement[1]);
-      setMiddlePoints([
-        getInterpolatedValue(
-          firstElementRect.left*0.2,
-          secondElementRect.top - topGap,
-          0.8
-        ),
-        (firstElementRect.top + secondElementRect.top) / 2,
-      ]);
-      setEndPoint([
-        secondElementRect.left - strokeWidth + secondElementRect.width / 2,
-        secondElementRect.top - topGap,
-      ]);
-      console.log('first: ', firstElementRect, 'second: ', secondElementRect);
-      // totalElement.forEach((element) => {
-      //   console.log(element.getBoundingClientRect());
-      //   // top + height + topGap
-      // });
+      //Create path array to store all generated paths. Each path must have a start position, a end position and at least two curve position in middle to make that path look good.
+      const pathResult: Array<IGeneratePath> = [];
+      //Set empty array to ref each time run init again.
+      const tempRef = ref.current;
+      ref.current = [];
+      //Generate all paths for above elements.
+      for (let index = 0; index < totalElement.length - 1; index++) {
+        //Generate all positions by passing two elements.
+        const generatePoints = generateBezierLine({
+          e1: getOffset(totalElement[index]),
+          e2: getOffset(totalElement[index + 1]),
+          topGap,
+          leftGap,
+          strokeWidth,
+          option: pathOptions[index],
+          defaultDistance,
+          // enalbleOpposite: false,
+        });
+        //Save that target and position to ref so that we can improve performance when users are scrolling.
+        ref.current.push({
+          target: totalElement[index],
+          position: getOffset(totalElement[index]).top,
+          animated: tempRef[index]?.animated,
+        });
+        //Save generated positions.
+        pathResult.push({
+          startPoint: generatePoints.startPoint,
+          endPoint: generatePoints.endPoint,
+          path: generatePoints.path,
+        });
+      }
+      //Save last element position to ref because we don't run to last element at for above.
+      ref.current.push({
+        target: totalElement[totalElement.length - 1],
+        position: getOffset(totalElement[totalElement.length - 1]).top,
+        animated: tempRef[totalElement.length - 1]?.animated,
+      });
+      //Set path state.
+      setPaths(pathResult);
     }
+    //Run init road lines.
     init();
-  }, [strokeWidth]);
-  console.log(middlePoints);
+  }, [strokeWidth, width, height, defaultDistance, topGap, leftGap]);
+
+  useEffect(() => {
+    if (!paths) return;
+
+    //Start path animation
+    function startAnimation(currentElement: SVGPathElement, index: number) {
+      startAppearAnimation(index + 1);
+      //Set stroke-dashoffset attribute of path to zero in order to make path element appear
+      countToZero(
+        (value: number) => {
+          currentElement.setAttribute('stroke-dashoffset', value.toString());
+        },
+        Number(currentElement.getAttribute('stroke-dasharray')),
+        animationTime
+      );
+      //When path animation finishes, show end circle
+      setTimeout(() => {
+        const endRoadCircle: SVGCircleElement | null = document.querySelector(
+          `#${END_ROAD_CIRCLE}-${index}`
+        );
+        if (endRoadCircle) {
+          endRoadCircle.style.display = '';
+        }
+      }, animationTime);
+      ref.current[index].animated = true;
+    }
+    //Start first appear animation
+    function startAppearAnimation(index: number, delayTime = animationTime) {
+      setTimeout(() => {
+        animationElements[index]?.classList.add('fade-in-element');
+        animationElements[index]?.classList.remove('first-appear');
+      }, delayTime);
+    }
+    //Remove scroll event listener
+    const removeScrollEventListener = () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+    //Check if user reach all svg then remove scroll event listener
+    function goToEndSvg(index: number) {
+      if (index === ref.current.length - 2) {
+        removeScrollEventListener();
+      }
+    }
+    //Handle user scroll
+    function handleScroll() {
+      //Get current user view point
+      const currentViewPoint =
+        window.scrollY + window.innerHeight - animationGap;
+
+      let currentElement: SVGPathElement | null = null;
+      let currentIndex = -1;
+      for (let index = 0; index < ref.current.length - 1; index++) {
+        //Find element is on a view point at the moment
+        if (currentViewPoint > ref.current[index].position) {
+          currentElement = pathElements[index];
+          currentIndex = index;
+          goToEndSvg(index);
+          //If that element haven't already animated, then animate path
+          if (
+            currentElement.getAttribute('stroke-dashoffset') !== '0' &&
+            currentElement.getAttribute('stroke-dashoffset') ===
+              currentElement.getAttribute('stroke-dasharray')
+          ) {
+            //Start path animation
+            startAnimation(currentElement, currentIndex);
+          }
+        }
+      }
+    }
+    //Get all path elements by querying use-road-path attribute
+    const pathElements: NodeListOf<SVGPathElement> = document.querySelectorAll(
+      `[use-road-path="true"]`
+    );
+
+    //Get all animation elements by querying class `first-appear`
+    const animationElements: NodeListOf<Element> =
+      document.querySelectorAll(`.first-appear`);
+    //Get container element
+    const containerElement: HTMLElement | null =
+      document.querySelector('#bezierRoadLine');
+    //Show all animation when prepations finish
+    if (containerElement) {
+      containerElement.style.opacity = '1';
+    }
+
+    //Add scroll event listener
+    window.addEventListener('scroll', handleScroll);
+
+    // Init road path animation
+    if (pathElements.length > 0) {
+      //Show first appear element immediately with no delay
+      startAppearAnimation(0, 0);
+      pathElements.forEach((el: SVGPathElement, index) => {
+        //Get total path's length in order to make path's animation
+        const totalLength = el.getTotalLength().toString();
+        const checkAnimated = ref.current[index].animated !== true;
+        el.setAttribute('stroke-dasharray', totalLength);
+        if (checkAnimated) {
+          el.setAttribute('stroke-dashoffset', totalLength);
+        }
+        const currentViewPoint =
+          window.scrollY + window.innerHeight - animationGap;
+        //Start all above animation if user's on middle of page
+        if (ref.current[index].position < currentViewPoint) {
+          if (checkAnimated) startAnimation(el, index);
+          goToEndSvg(index);
+        }
+      });
+    }
+
+    return () => {
+      removeScrollEventListener();
+    };
+  }, [paths, animationGap, animationTime]);
+
+  if (!paths) return <></>;
+
   return (
-    <svg width={width} height={height}>
+    <svg className='overflow-clip' width={width} height={height}>
       <path
-        d={`M ${startPoint} 
-            C 900,900 600,100 ${endPoint}
+        d={`M ${paths[0]?.startPoint} 
+            ${paths[0]?.endPoint}
         `}
-        stroke='#8b5cf6'
         strokeWidth={strokeWidth}
         strokeLinecap='round'
         fill='none'
+        className='stroke-orange-500'
       ></path>
+      {paths &&
+        paths.map((path: IGeneratePath, index: number) => (
+          <React.Fragment key={`path + ${index}`}>
+            <path
+              d={`M ${path.startPoint} ${path.path} ${path.endPoint}`}
+              use-road-path='true'
+              strokeWidth={strokeWidth}
+              strokeLinecap='round'
+              fill='none'
+              className='stroke-neutral-500'
+            ></path>
+            <ellipse
+              cx={path.startPoint[0]}
+              cy={path.startPoint[1]}
+              rx={strokeWidth * 1.25}
+              ry={strokeWidth * 1.25}
+              className='fill-blue-400'
+            ></ellipse>
+            <ellipse
+              cx={path.endPoint[0]}
+              cy={path.endPoint[1]}
+              rx={strokeWidth * 1.25}
+              ry={strokeWidth * 1.25}
+              id={`${END_ROAD_CIRCLE}-${index}`}
+              style={{ display: 'none' }}
+              className='fill-blue-600'
+            ></ellipse>
+          </React.Fragment>
+        ))}
       Sorry, your browser does not support inline SVG.
     </svg>
   );
