@@ -2,7 +2,8 @@ import React from 'react';
 import Router from 'next/router';
 import 'styles/globals.css';
 import type { AppProps } from 'next/app';
-import Loading from '@/components/Loading';
+import { ThemeProvider } from 'next-themes';
+import Loading from 'components/Loading';
 
 function MyApp({ Component, pageProps }: AppProps) {
   const [loading, setLoading] = React.useState(false);
@@ -35,7 +36,11 @@ function MyApp({ Component, pageProps }: AppProps) {
   }, []);
   return (
     <>
-      {!loading && <Component {...pageProps} />}
+      {!loading && (
+        <ThemeProvider attribute="class">
+          <Component {...pageProps} />
+        </ThemeProvider>
+      )}
       <Loading />
     </>
   );

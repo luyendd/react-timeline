@@ -1,5 +1,5 @@
 import React, { FunctionComponent, useEffect, useRef, useState } from 'react';
-import { countToZero, generateBezierLine, getOffset } from '../../utils/common';
+import { generateBezierLine, getOffset, countToZero } from 'utils/common';
 
 type Props = {
   strokeWidth: number;
